@@ -66,9 +66,8 @@ def take_user_posts(user_id):
         time.sleep(0.5)
     return posts
 
-# Функция для получения подписок пользователя
 def get_user_subscriptions(user_id):
-    groups = []
+    group_ids = []
     offset = 0
     while True:
         params = {
@@ -82,13 +81,43 @@ def get_user_subscriptions(user_id):
         if 'error' in data:
             print(f"Ошибка API: {data['error']['error_msg']} (Код: {data['error']['error_code']})")
             break
-        items = data.get('response', {}).get('items', [])
-        if not items:
+
+        response = data.get('response', {})
+        group_items = response.get('groups', [])  # Извлекаем идентификаторы групп
+        group_items = group_items.get('items', [])
+        if not group_items or offset > 1000:  # Если групп больше нет, выходим из цикла
             break
-        groups.extend([item['name'] for item in items if item.get('type') in ['page', 'group']])
-        offset += 200
+
+        group_ids.extend(group_items)  # Добавляем ID групп
+        offset += 200  # Увеличиваем смещение
         time.sleep(0.5)
+
+    # Получение данных о группах по их ID
+    groups = []
+    for i in range(0, len(group_ids), 500):  # Обработка батчами до 500 ID за запрос
+        batch_ids = group_ids[i:i + 500]
+        params = {
+            'access_token': TOKEN,
+            'v': VERSION,
+            'group_ids': ','.join(map(str, batch_ids)),  # Преобразуем ID в строку через запятую
+            'fields': 'name,type'
+        }
+        data = safe_request('https://api.vk.com/method/groups.getById', params)
+        if 'error' in data:
+            print(f"Ошибка API при получении данных о группах: {data['error']['error_msg']} (Код: {data['error']['error_code']})")
+            continue
+
+        group_info = data.get('response', {}).get('groups', [])
+        for group in group_info:
+            group_name = group.get('name')
+            if group_name:
+                groups.append(group_name)
+
     return groups
+
+
+
+
 
 # Функция для анализа текстов постов
 def analyze_texts(texts, vectorizer=None):
