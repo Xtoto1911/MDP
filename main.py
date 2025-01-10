@@ -10,8 +10,6 @@ import time
 TOKEN = '4d428b6e4d428b6e4d428b6e274e666c6c44d424d428b6e2a0091d81da35c2108a6468e'  # Токен для доступа к API VK
 VERSION = '5.199'  # Версия API VK
 
-# Функция для безопасного выполнения запросов к API с учетом возможных ошибок и ограничений скорости
-
 def safe_request(url, params, retries=3, delay=0.5):
     """
     Выполняет запрос к API VK с учетом повторных попыток в случае ошибок.
@@ -60,16 +58,15 @@ def get_user_id(user_name):
     data = safe_request('https://api.vk.com/method/users.get', params)
     if 'response' in data:
         user_id = data['response'][0]['id']
-        return user_id  # Возвращаем числовой ID
+        return user_id
     else:
         print(f"Ошибка API: {data['error']['error_msg']} (Код: {data['error']['error_code']})")
     return None
 
-# Функция для получения списка постов пользователя
 
 def take_user_posts(user_id):
     """
-    Получает тексты всех постов пользователя с его стены.
+    Получает тексты всех постов пользователя с его стены, включая репосты.
 
     :param user_id: ID пользователя VK
     :return: Список текстов постов
@@ -97,13 +94,26 @@ def take_user_posts(user_id):
         if not items:
             break
 
-        # Добавляем текст каждого поста, исключая пустые записи
-        posts.extend([post.get('text', '').strip() for post in items if 'text' in post])
+        for post in items:
+            text = post.get('text', '').strip()
+            
+            # Если текст пустой, пытаемся извлечь данные из copy_history (репосты)
+            if not text and 'copy_history' in post:
+                text = ' '.join(
+                    copy.get('text', '').strip() 
+                    for copy in post['copy_history'] 
+                    if copy.get('text', '').strip()
+                )
+
+            # Добавляем текст поста в список, если он не пустой
+            if text:
+                posts.append(text)
 
         offset += 100  # Смещение для следующей выборки
         time.sleep(0.5)  # Задержка для предотвращения блокировки
 
     return posts
+
 
 # Функция для получения подписок пользователя (групп)
 
@@ -190,7 +200,6 @@ def analyze_texts(texts, vectorizer=None):
 
     return tfidf_matrix, vectorizer
 
-# Функция для создания среднего профиля пользователя
 
 def build_average_profile(users_posts, users_subscriptions):
     """
@@ -216,7 +225,6 @@ def build_average_profile(users_posts, users_subscriptions):
         'group_stats': group_counter  # Частотный счетчик групп
     }
 
-# Функция для сравнения нового пользователя со средним профилем
 
 def compare_user_with_profile(user_posts, user_subscriptions, avg_profile):
     """
@@ -250,7 +258,6 @@ def compare_user_with_profile(user_posts, user_subscriptions, avg_profile):
         'group_similarity': group_similarity  # Сходство по подпискам
     }
 
-# Основной блок
 if __name__ == "__main__":
     user_names = ['princessss_kr', 'id175633281', 'ropik05']
     all_posts = []
@@ -271,7 +278,7 @@ if __name__ == "__main__":
         print(f"Ошибка при построении среднего профиля: {e}")
         exit()
 
-    new_user_name = 'ropik05'
+    new_user_name = 'neadmace'
     new_user_id = get_user_id(new_user_name)
     if new_user_id:
         new_user_posts = take_user_posts(new_user_id)
